@@ -1,0 +1,60 @@
+================================================================
+数据质量报告 · Wikipedia 各国人口表 清洗入库分析
+================================================================
+生成时间   : 2026-10-10 20:53:53
+数据来源   : https://en.wikipedia.org/wiki/List_of_sovereign_states_by_population
+抓取方式   : 命令行直连 Wikipedia 被网络阻断，改经 Trae 内置浏览器
+             抓取页面主表（class 含 wikitable 的第一张表），
+             原始表格已存为 raw_wiki_population.tsv 供审计
+清洗脚本   : pipeline_countries.py（pandas + sqlite3）
+
+--- 1. 行数统计 ---
+原始表格数据行           : 240 行（含 World 汇总行 1 行）
+进入清洗的行（去表头/空行）: 240 行
+排除 World 汇总行        : 1 行（人口 8,232,000,000，非国家，不入库）
+删除（人口缺失）         : 0 行
+清洗后入库行数           : 239 行（要求 >= 100，满足）
+
+--- 2. 清洗动作明细 ---
+  - 脚注引用已删除: [1]、[b]、[dubious - discuss]、(see note) 等
+    示例: 'UN projection[1][3]' -> 'UN projection'
+    示例: 'Official projection[4]' -> 'Official projection'
+  - 不可见空格 \xa0 已替换为普通空格
+  - 千分位逗号已删除: '1,429,404,000' -> 1429404000
+  - 数字列已转换: population -> INTEGER, pct_world -> REAL（'17.3%' -> 17.3）
+
+--- 3. 缺失值统计（清洗后，入库前）---
+  population 人口         : 0 个缺失
+  pct_world 占世界比        : 0 个缺失
+  density 密度            : 239 个缺失
+  census_date 统计日期      : 0 个缺失
+  source 来源             : 0 个缺失
+  notes 备注              : 0 个缺失
+  说明: 源页面主表不包含密度（density）列，按规则 density 全部
+        保留为 NULL 入库；人口列无缺失，未触发删行规则。
+
+--- 4. 数字列类型 ---
+  population : SQLite INTEGER  (Python int, 千分位已清洗)
+  pct_world  : SQLite REAL  (Python float, 百分号已清洗)
+  density    : SQLite REAL  (全 NULL)
+  rank       : SQLite INTEGER  (按人口降序 1..239)
+
+--- 5. Top 10（按人口）---
+  排名  国家/地区                                              人口      占世界  统计日期
+  1    India                                   1,429,404,000    17.3%  1 Jul 2026
+  2    China                                   1,404,890,000    17.0%  31 Dec 2025
+  3    United States                             341,784,857     4.1%  1 Jul 2025
+  4    Indonesia                                 288,315,089     3.5%  31 Dec 2025
+  5    Pakistan                                  241,499,431     2.9%  1 Mar 2023
+  6    Nigeria                                   223,800,000     2.7%  1 Jul 2023
+  7    Brazil                                    214,211,951     2.6%  1 Jul 2026
+  8    Bangladesh                                169,828,911     2.1%  14 Jun 2022
+  9    Russia                                    146,028,325     1.8%  1 Jan 2025
+  10   Mexico                                    131,231,919     1.6%  30 Jun 2026
+
+--- 6. 一致性抽查 ---
+  各国人口合计   : 8,073,564,622
+  World 汇总人口 : 8,232,000,000
+  合计/世界      : 98.1%（差额为源表脚注口径差异与非常驻人口，属正常）
+  入库后可计算性 : SELECT MAX(population), MIN(population), ROUND(AVG(population)) FROM countries;
+================================================================
